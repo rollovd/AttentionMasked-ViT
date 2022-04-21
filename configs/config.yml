@@ -1,0 +1,194 @@
+data:
+  train:
+    module: supplementary.data.imageclassifier
+    type: DataFrameImageClassifierDataset
+    config:
+      datasource_type: 'csv'
+      filename_column: 'frame_filename'
+      aspect_ratio_column: 'aspect_ratio'
+      proportion_class: 'proportion_class'
+      label_column: 'class'
+      datasource: '/mnt/data/train-vit-final-balanced.csv'
+      custom_dataset: false
+      mask: true
+      resize: null
+  test:
+    module: supplementary.data.imageclassifier
+    type: DataFrameImageClassifierDataset
+    config:
+      datasource_type: 'csv'
+      filename_column: 'frame_filename'
+      aspect_ratio_column: 'aspect_ratio'
+      proportion_class: 'proportion_class'
+      label_column: 'class'
+#      datasource: '/mnt/data/val-final.csv'
+      datasource: '/mnt/data/val-vit-final-balanced.csv'
+      custom_dataset: false
+      mask: true
+      resize: null
+
+transform:
+  train:
+    augment:
+      -
+          module: albumentations
+          type: Affine
+          config:
+            rotate: [-5, 5]
+            scale: [0.92, 1.1]
+            always_apply: true
+      -
+          module: albumentations
+          type: HorizontalFlip
+          config:
+            p: 0.5
+            always_apply: true
+      -
+          module: albumentations
+          type: RandomBrightnessContrast
+          config:
+            brightness_limit: 0.05
+            always_apply: true
+
+      -
+          module: albumentations
+          type: ColorJitter
+          config:
+            brightness: 0.05
+            contrast: 0.1
+            saturation: 0.1
+            hue: 0.05
+#
+#      -
+#          module: albumentations
+#          type: Cutout
+#          config:
+#            num_holes: 8
+#            max_h_size: 16
+#            max_w_size: 16
+#            fill_value: 0
+#            p: 0.2
+#
+#      -   module: albumentations
+#          type: Cutout
+#          config:
+#            num_holes: 8
+#            max_h_size: 16
+#            max_w_size: 16
+#            fill_value: 255
+#            p: 0.2
+
+
+
+  test:
+    augment:
+      []
+
+dataloaders:
+  train:
+    batch_size: 150 # 380 optimal
+    shuffle: true
+    num_workers: 8
+    pin_memory: true
+    drop_last: true
+  test:
+    batch_size: 150 # 380 optimal
+    shuffle: false
+    num_workers: 8
+    pin_memory: true
+    drop_last: false
+
+net:
+  module: supplementary.nets.ViT
+  type: VisionTransformer
+  config:
+    backbone:
+      img_size: 256
+      patch_size: 16
+      in_chans: 3
+      num_classes: 1
+      embed_dim: 192
+      depth: 8
+      num_heads: 12
+      attn_mask: true
+      pos_embed: 'learnable'
+      head_name: 'vanilla'
+      sigma: 96
+      key_bias: false
+      query_bias: false
+      value_bias: false
+
+#net:
+#  module: supplementary.nets.mobilenet
+#  type: MobileNetV2
+#  config:
+#    backbone:
+#      alpha: 1.
+#      sigma: 256
+#      avg_pool_2d: true
+
+#net:
+#  module: supplementary.nets.SWIN
+#  type: SwinTransformer
+#  config:
+#    backbone:
+#      hidden_dim: 96
+#      layers: [2, 2, 6, 2]
+#      heads: [3, 6, 12, 24]
+#      channels: 3
+#      num_classes: 1
+#      head_dim: 32
+#      window_size: 7
+#      downscaling_factors: [4, 2, 2, 2]
+#      relative_pos_embedding: true
+
+loss:
+  - cross_entropy:
+      module: torch.nn
+      type: BCELoss
+      weight: 1.0
+      config:
+        reduction: 'mean'
+
+#loss:
+#  - wmv:
+#      module: supplementary.losses.WMV
+#      type: WMVLoss
+#      config:
+#        p: 2
+#        gamma: 0.1
+
+metrics:
+  - metrics:
+      module: supplementary.metrics.metrics
+      type: Metrics
+
+optimizer:
+  module: torch.optim
+  type: Adam
+  config:
+    lr: 0.001
+    weight_decay: 1e-4
+    betas: [0.9, 0.999]
+
+sampler:
+  module: supplementary.samplers.sampler
+  type: ClassImbalanceSampler
+  config:
+    balancing_var: 'aspect_ratio' # 'classes'
+
+trainer:
+  module: supplementary.trainers.baseline
+  type: Trainer
+  config:
+    epochs: 65
+    images_frequency_save: 300
+    number_of_images_to_save: 3
+    save_images: true
+    only_validate: false
+    times_to_validate_per_epoch: 3
+    first_epoch_to_validate: 1
+    num_warmup_epochs: 2
+    pretrained_model: null
+#    pretrained_model: '/home/yandex/vit-final/saved_models/VisionTransformer_embed_dim_192_pos_embed_learnable_epochs_75_depth_8_heads_12_head_name_vanilla_query_bias_True_key_bias_True_value_bias_False/index_65_accuracy_0.835_VisionTransformer_embed_dim_192_pos_embed_learnable_epochs_75_depth_8_heads_12_head_name_vanilla_query_bias_True_key_bias_True_value_bias_False'
+    logging: true

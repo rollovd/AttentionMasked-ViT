@@ -1,0 +1,160 @@
+data:
+  train:
+    module: supplementary.data.imageclassifier
+    type: DataFrameImageClassifierDataset
+    config:
+      datasource_type: 'csv'
+      filename_column: 'filename'
+      aspect_ratio_column: 'proportion'
+      proportion_class: 'proportion_class'
+      label_column: 'class'
+      datasource: '/mnt/data/train-final.csv'
+      custom_dataset: false
+      mask: true
+      resize: null
+  test:
+    module: supplementary.data.imageclassifier
+    type: DataFrameImageClassifierDataset
+    config:
+      datasource_type: 'csv'
+      filename_column: 'filename'
+      aspect_ratio_column: 'proportion'
+      proportion_class: 'proportion_class'
+      label_column: 'class'
+      datasource: '/mnt/data/val-final.csv'
+      custom_dataset: false
+      mask: true
+      resize: null
+
+wandb:
+  name: 'ViT without sampling'
+
+transform:
+  train:
+    augment:
+      -
+          module: albumentations
+          type: Affine
+          config:
+            rotate: [-5, 5]
+            scale: [0.92, 1.1]
+            always_apply: true
+      -
+          module: albumentations
+          type: HorizontalFlip
+          config:
+            p: 0.5
+            always_apply: true
+      -
+          module: albumentations
+          type: RandomBrightnessContrast
+          config:
+            brightness_limit: 0.1
+            always_apply: true
+
+#      -
+#          module: albumentations
+#          type: ColorJitter
+#          config:
+#            brightness: 0.2
+#            contrast: 0.15
+#            saturation: 0.1
+#            hue: 0.1
+#
+#      -
+#          module: albumentations
+#          type: Cutout
+#          config:
+#            num_holes: 8
+#            max_h_size: 16
+#            max_w_size: 16
+#            fill_value: 0
+#            p: 0.2
+#
+#      -   module: albumentations
+#          type: Cutout
+#          config:
+#            num_holes: 8
+#            max_h_size: 16
+#            max_w_size: 16
+#            fill_value: 255
+#            p: 0.2
+
+
+
+  test:
+    augment:
+      []
+
+dataloaders:
+  train:
+    batch_size: 420
+    shuffle: true
+    num_workers: 8
+    pin_memory: true
+    drop_last: true
+  test:
+    batch_size: 420
+    shuffle: false
+    num_workers: 8
+    pin_memory: true
+    drop_last: false
+
+net:
+  module: supplementary.nets.ViT
+  type: VisionTransformer
+  config:
+    backbone:
+      img_size: 256
+      patch_size: 16
+      in_chans: 3
+      num_classes: 1
+      embed_dim: 192
+      depth: 6
+      num_heads: 8
+      attn_mask: true
+      pos_embed: 'harmonic'
+      head_name: 'vanilla'
+      sigma: 96
+
+loss:
+  - cross_entropy:
+      module: torch.nn
+      type: BCELoss
+      weight: 1.0
+      config:
+        reduction: 'mean'
+
+metrics:
+  - metrics:
+      module: supplementary.metrics.metrics
+      type: Metrics
+
+optimizer:
+  module: torch.optim
+  type: Adam
+  config:
+    lr: 0.001
+    weight_decay: 1e-4
+    betas: [0.9, 0.999]
+
+sampler:
+  module: supplementary.samplers.sampler
+  type: ClassImbalanceSampler
+  config:
+    balancing_var: 'aspect_ratio' # 'classes'
+
+trainer:
+  module: supplementary.trainers.baseline
+  type: Trainer
+  config:
+    epochs: 35
+    images_frequency_save: 200
+    number_of_images_to_save: 50
+    save_images: true
+    only_validate: false
+    times_to_validate_per_epoch: 4
+    first_epoch_to_validate: 10
+    num_warmup_epochs: 2
+    pretrained_model: null
+    logging: true
